@@ -34,6 +34,14 @@ struct ContentView: View {
                                                 showCompletedHint = true
                                             }
                                         },
+                                        onMoveUp: {
+                                            store.moveTodo(id: item.id, inDisplayGroup: group.groupName, direction: -1)
+                                        },
+                                        onMoveDown: {
+                                            store.moveTodo(id: item.id, inDisplayGroup: group.groupName, direction: 1)
+                                        },
+                                        canMoveUp: store.canMoveTodo(id: item.id, inDisplayGroup: group.groupName, direction: -1),
+                                        canMoveDown: store.canMoveTodo(id: item.id, inDisplayGroup: group.groupName, direction: 1),
                                         onEdit: {
                                             sheetState = .edit(item)
                                         },
@@ -41,6 +49,11 @@ struct ContentView: View {
                                             store.deleteTodo(id: item.id)
                                         }
                                     )
+                                    .contextMenu {
+                                        Button("新增待办") {
+                                            sheetState = .add
+                                        }
+                                    }
                                 }
                             }
                         } header: {
@@ -138,6 +151,11 @@ struct ContentView: View {
             }
         } message: {
             Text("已完成的待办会进入“已完成”列表，你可以在那里查看或恢复。")
+        }
+        .contextMenu {
+            Button("新增待办") {
+                sheetState = .add
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             store.moveCompletedItemsInMainListIfNeeded()

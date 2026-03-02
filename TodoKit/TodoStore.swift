@@ -1,6 +1,5 @@
 import Combine
 import Foundation
-import SwiftUI
 
 @MainActor
 final class TodoStore: ObservableObject {
@@ -63,8 +62,42 @@ final class TodoStore: ObservableObject {
     }
 
     func deleteTodo(at offsets: IndexSet) {
-        items.remove(atOffsets: offsets)
+        for index in offsets.sorted(by: >) {
+            items.remove(at: index)
+        }
         persist()
+    }
+
+    func moveTodosInDisplayGroup(_ displayGroupName: String, from source: IndexSet, to destination: Int) {
+        var ids = items
+            .filter { canonicalDisplayGroupName(for: $0.groupName) == displayGroupName && !$0.isCompleted }
+            .map(\.id)
+
+        moveArray(&ids, from: source, to: destination)
+        reorderTodosInDisplayGroup(displayGroupName, orderedIDs: ids)
+    }
+
+    func canMoveTodo(id: UUID, inDisplayGroup displayGroupName: String, direction: Int) -> Bool {
+        let ids = items
+            .filter { canonicalDisplayGroupName(for: $0.groupName) == displayGroupName && !$0.isCompleted }
+            .map(\.id)
+
+        guard let currentIndex = ids.firstIndex(of: id) else { return false }
+        let nextIndex = currentIndex + direction
+        return ids.indices.contains(nextIndex)
+    }
+
+    func moveTodo(id: UUID, inDisplayGroup displayGroupName: String, direction: Int) {
+        var ids = items
+            .filter { canonicalDisplayGroupName(for: $0.groupName) == displayGroupName && !$0.isCompleted }
+            .map(\.id)
+
+        guard let currentIndex = ids.firstIndex(of: id) else { return }
+        let nextIndex = currentIndex + direction
+        guard ids.indices.contains(nextIndex) else { return }
+
+        ids.swapAt(currentIndex, nextIndex)
+        reorderTodosInDisplayGroup(displayGroupName, orderedIDs: ids)
     }
 
     @discardableResult
@@ -148,6 +181,32 @@ final class TodoStore: ObservableObject {
         supportedHistoryLimits.contains(rawValue) ? rawValue : 20
     }
 
+    private func canonicalDisplayGroupName(for rawValue: String) -> String {
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? Self.ungroupedDisplayName : trimmed
+    }
+
+    private func reorderTodosInDisplayGroup(_ displayGroupName: String, orderedIDs: [UUID]) {
+        guard !orderedIDs.isEmpty else { return }
+
+        let groupItems = items.filter { canonicalDisplayGroupName(for: $0.groupName) == displayGroupName && !$0.isCompleted }
+        guard !groupItems.isEmpty else { return }
+
+        let byID = Dictionary(uniqueKeysWithValues: groupItems.map { ($0.id, $0) })
+        let reorderedGroupItems = orderedIDs.compactMap { byID[$0] }
+        guard reorderedGroupItems.count == groupItems.count else { return }
+
+        var reorderedIterator = reorderedGroupItems.makeIterator()
+        items = items.map { item in
+            guard canonicalDisplayGroupName(for: item.groupName) == displayGroupName, !item.isCompleted else {
+                return item
+            }
+            return reorderedIterator.next() ?? item
+        }
+
+        persist()
+    }
+
     private func markCompletedHintAsShownIfNeeded() -> Bool {
         if UserDefaults.standard.bool(forKey: completedHintShownKey) {
             return false
@@ -203,4 +262,16 @@ final class TodoStore: ObservableObject {
         guard let data = try? encoder.encode(snapshot) else { return }
         try? data.write(to: localFileURL, options: .atomic)
     }
+
+    private func moveArray(_ array: inout [UUID], from source: IndexSet, to destination: Int) {
+        let moving = source.sorted().map { array[$0] }
+        for index in source.sorted(by: >) {
+            array.remove(at: index)
+        }
+
+        let target = min(max(destination, 0), array.count)
+        array.insert(contentsOf: moving, at: target)
+    }
+
+    private static let ungroupedDisplayName = "未分组"
 }

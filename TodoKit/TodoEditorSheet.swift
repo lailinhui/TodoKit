@@ -10,6 +10,7 @@ struct TodoEditorSheet: View {
     @State private var note: String
     @State private var groupName: String
     @State private var errorMessage: String?
+    @FocusState private var focusedField: InputField?
 
     init(
         mode: Mode,
@@ -46,6 +47,7 @@ struct TodoEditorSheet: View {
 
                 TextField("输入待办标题", text: $title)
                     .textFieldStyle(.roundedBorder)
+                    .focused($focusedField, equals: .title)
                     .onChange(of: title) { _, newValue in
                         if newValue.count > 30 {
                             title = String(newValue.prefix(30))
@@ -97,6 +99,17 @@ struct TodoEditorSheet: View {
         }
         .padding(18)
         .frame(width: 380)
+        .onAppear {
+            if mode == .add {
+                DispatchQueue.main.async {
+                    focusedField = .title
+                }
+            }
+        }
+    }
+
+    private enum InputField {
+        case title
     }
 
     enum Mode {

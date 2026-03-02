@@ -3,6 +3,10 @@ import SwiftUI
 struct TodoRowView: View {
     let item: TodoItem
     let onToggle: () -> Void
+    let onMoveUp: () -> Void
+    let onMoveDown: () -> Void
+    let canMoveUp: Bool
+    let canMoveDown: Bool
     let onEdit: () -> Void
     let onDelete: () -> Void
 
@@ -31,6 +35,22 @@ struct TodoRowView: View {
             }
 
             Spacer(minLength: 8)
+
+            Button(action: onMoveUp) {
+                Image(systemName: "chevron.up")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.borderless)
+            .disabled(!canMoveUp)
+            .help("上移")
+
+            Button(action: onMoveDown) {
+                Image(systemName: "chevron.down")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.borderless)
+            .disabled(!canMoveDown)
+            .help("下移")
 
             Button(action: onEdit) {
                 Image(systemName: "pencil")
