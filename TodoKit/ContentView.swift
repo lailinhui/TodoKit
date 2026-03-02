@@ -103,7 +103,7 @@ struct ContentView: View {
         .sheet(item: $sheetState) { state in
             switch state {
             case .add:
-                TodoEditorSheet(mode: .add) { title, note, groupName in
+                TodoEditorSheet(mode: .add, initialGroupName: store.lastUsedGroupName) { title, note, groupName in
                     try store.addTodo(title: title, note: note, groupName: groupName)
                 }
             case .edit(let item):

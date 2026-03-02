@@ -7,14 +7,17 @@ final class TodoStore: ObservableObject {
     @Published private(set) var items: [TodoItem] = []
     @Published private(set) var completedItems: [TodoItem] = []
     @Published private(set) var completedHistoryLimit: Int = 20
+    @Published private(set) var lastUsedGroupName: String = ""
 
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
     private let localFileName = "todos.json"
     private let supportedHistoryLimits: Set<Int> = [20, 50, 100]
     private let completedHintShownKey = "todokit.completed.hint.shown"
+    private let lastUsedGroupNameKey = "todokit.last.used.group"
 
     init() {
+        lastUsedGroupName = UserDefaults.standard.string(forKey: lastUsedGroupNameKey) ?? ""
         loadFromDisk()
         moveCompletedItemsInMainListIfNeeded()
         if trimCompletedItemsIfNeeded() {
@@ -24,17 +27,20 @@ final class TodoStore: ObservableObject {
 
     func addTodo(title: String, note: String, groupName: String) throws {
         let normalizedTitle = try Self.normalizedTitle(from: title)
+        let normalizedGroupName = Self.normalizedGroupName(from: groupName)
         let now = Date()
 
         let item = TodoItem(
             title: normalizedTitle,
             note: note.trimmingCharacters(in: .whitespacesAndNewlines),
-            groupName: Self.normalizedGroupName(from: groupName),
+            groupName: normalizedGroupName,
             createdAt: now,
             updatedAt: now,
             completedAt: nil
         )
 
+        lastUsedGroupName = normalizedGroupName
+        UserDefaults.standard.set(normalizedGroupName, forKey: lastUsedGroupNameKey)
         items.insert(item, at: 0)
         persist()
     }
