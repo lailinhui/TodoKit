@@ -1,0 +1,200 @@
+import Combine
+import Foundation
+import SwiftUI
+
+@MainActor
+final class TodoStore: ObservableObject {
+    @Published private(set) var items: [TodoItem] = []
+    @Published private(set) var completedItems: [TodoItem] = []
+    @Published private(set) var completedHistoryLimit: Int = 20
+
+    private let encoder = JSONEncoder()
+    private let decoder = JSONDecoder()
+    private let localFileName = "todos.json"
+    private let supportedHistoryLimits: Set<Int> = [20, 50, 100]
+    private let completedHintShownKey = "todokit.completed.hint.shown"
+
+    init() {
+        loadFromDisk()
+        moveCompletedItemsInMainListIfNeeded()
+        if trimCompletedItemsIfNeeded() {
+            persist()
+        }
+    }
+
+    func addTodo(title: String, note: String, groupName: String) throws {
+        let normalizedTitle = try Self.normalizedTitle(from: title)
+        let now = Date()
+
+        let item = TodoItem(
+            title: normalizedTitle,
+            note: note.trimmingCharacters(in: .whitespacesAndNewlines),
+            groupName: Self.normalizedGroupName(from: groupName),
+            createdAt: now,
+            updatedAt: now,
+            completedAt: nil
+        )
+
+        items.insert(item, at: 0)
+        persist()
+    }
+
+    func updateTodo(id: UUID, title: String, note: String, groupName: String) throws {
+        let normalizedTitle = try Self.normalizedTitle(from: title)
+        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
+
+        items[index].title = normalizedTitle
+        items[index].note = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        items[index].groupName = Self.normalizedGroupName(from: groupName)
+        items[index].updatedAt = Date()
+
+        persist()
+    }
+
+    func deleteTodo(id: UUID) {
+        items.removeAll { $0.id == id }
+        persist()
+    }
+
+    func deleteTodo(at offsets: IndexSet) {
+        items.remove(atOffsets: offsets)
+        persist()
+    }
+
+    @discardableResult
+    func toggleCompletion(id: UUID) -> Bool {
+        guard let index = items.firstIndex(where: { $0.id == id }) else { return false }
+
+        if items[index].isCompleted {
+            items[index].completedAt = nil
+            items[index].updatedAt = Date()
+            persist()
+            return false
+        }
+
+        var item = items.remove(at: index)
+        item.completedAt = Date()
+        item.updatedAt = Date()
+
+        completedItems.insert(item, at: 0)
+        trimCompletedItemsIfNeeded()
+        persist()
+        return markCompletedHintAsShownIfNeeded()
+    }
+
+    func moveCompletedItemsInMainListIfNeeded() {
+        var movedItems: [TodoItem] = []
+
+        items.removeAll { item in
+            guard item.completedAt != nil else { return false }
+            movedItems.append(item)
+            return true
+        }
+
+        guard !movedItems.isEmpty else {
+            return
+        }
+
+        movedItems.sort {
+            ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast)
+        }
+        completedItems.insert(contentsOf: movedItems, at: 0)
+        trimCompletedItemsIfNeeded()
+        persist()
+    }
+
+    func restoreCompletedTodo(id: UUID) {
+        guard let index = completedItems.firstIndex(where: { $0.id == id }) else {
+            return
+        }
+
+        var item = completedItems.remove(at: index)
+        item.completedAt = nil
+        item.updatedAt = Date()
+
+        items.insert(item, at: 0)
+        persist()
+    }
+
+    func setCompletedHistoryLimit(_ limit: Int) {
+        completedHistoryLimit = normalizedCompletedHistoryLimit(limit)
+        _ = trimCompletedItemsIfNeeded()
+        persist()
+    }
+
+    private static func normalizedTitle(from rawValue: String) throws -> String {
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            throw TodoValidationError.emptyTitle
+        }
+        guard trimmed.count <= 30 else {
+            throw TodoValidationError.titleTooLong
+        }
+
+        return trimmed
+    }
+
+    private static func normalizedGroupName(from rawValue: String) -> String {
+        rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func normalizedCompletedHistoryLimit(_ rawValue: Int) -> Int {
+        supportedHistoryLimits.contains(rawValue) ? rawValue : 20
+    }
+
+    private func markCompletedHintAsShownIfNeeded() -> Bool {
+        if UserDefaults.standard.bool(forKey: completedHintShownKey) {
+            return false
+        }
+
+        UserDefaults.standard.set(true, forKey: completedHintShownKey)
+        return true
+    }
+
+    private var localFileURL: URL {
+        let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let folder = root.appendingPathComponent("TodoKit", isDirectory: true)
+
+        if !FileManager.default.fileExists(atPath: folder.path) {
+            try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        }
+
+        return folder.appendingPathComponent(localFileName)
+    }
+
+    private func loadFromDisk() {
+        guard let data = try? Data(contentsOf: localFileURL) else { return }
+
+        guard let snapshot = try? decoder.decode(TodoSnapshot.self, from: data) else { return }
+        items = snapshot.items
+        completedItems = snapshot.completedItems.sorted {
+            ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast)
+        }
+        completedHistoryLimit = normalizedCompletedHistoryLimit(snapshot.completedHistoryLimit)
+    }
+
+    private func persist() {
+        let snapshot = TodoSnapshot(
+            items: items,
+            completedItems: completedItems,
+            completedHistoryLimit: completedHistoryLimit,
+            modifiedAt: Date()
+        )
+        saveToDisk(snapshot)
+    }
+
+    @discardableResult
+    private func trimCompletedItemsIfNeeded() -> Bool {
+        let before = completedItems.count
+        if completedItems.count > completedHistoryLimit {
+            completedItems = Array(completedItems.prefix(completedHistoryLimit))
+        }
+
+        return completedItems.count != before
+    }
+
+    private func saveToDisk(_ snapshot: TodoSnapshot) {
+        guard let data = try? encoder.encode(snapshot) else { return }
+        try? data.write(to: localFileURL, options: .atomic)
+    }
+}
