@@ -77,6 +77,7 @@ struct ContentView: View {
                     }
                 }
                 .listStyle(.inset)
+                .textSelection(.enabled)
             }
         }
         .frame(minWidth: 420, minHeight: 320)

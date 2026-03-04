@@ -42,7 +42,7 @@ struct CompletedTodosSheet: View {
                 ContentUnavailableView(
                     "暂无已完成记录",
                     systemImage: "clock.arrow.circlepath",
-                    description: Text("已完成 10 分钟后的待办会进入这里")
+                    description: Text("已完成的待办会进入这里")
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -68,6 +68,14 @@ struct CompletedTodosSheet: View {
 
                             Spacer(minLength: 8)
 
+                            Button(role: .destructive) {
+                                store.deleteCompletedTodo(id: item.id)
+                            } label: {
+                                Image(systemName: "trash")
+                            }
+                            .buttonStyle(.borderless)
+                            .help("删除")
+
                             Button("恢复") {
                                 store.restoreCompletedTodo(id: item.id)
                             }
@@ -78,6 +86,7 @@ struct CompletedTodosSheet: View {
                     }
                 }
                 .listStyle(.inset)
+                .textSelection(.enabled)
             }
         }
         .padding(18)

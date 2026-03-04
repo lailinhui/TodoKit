@@ -155,6 +155,11 @@ final class TodoStore: ObservableObject {
         persist()
     }
 
+    func deleteCompletedTodo(id: UUID) {
+        completedItems.removeAll { $0.id == id }
+        persist()
+    }
+
     func setCompletedHistoryLimit(_ limit: Int) {
         completedHistoryLimit = normalizedCompletedHistoryLimit(limit)
         _ = trimCompletedItemsIfNeeded()

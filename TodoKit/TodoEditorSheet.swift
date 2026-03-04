@@ -32,18 +32,15 @@ struct TodoEditorSheet: View {
                 .font(.headline)
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("分组（可选）")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 6) {
+                    Text("标题")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
 
-                TextField("例如：工作 / 学习 / 生活", text: $groupName)
-                    .textFieldStyle(.roundedBorder)
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("标题")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    Text("\(title.count)/30")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
 
                 TextField("输入待办标题", text: $title)
                     .textFieldStyle(.roundedBorder)
@@ -53,10 +50,15 @@ struct TodoEditorSheet: View {
                             title = String(newValue.prefix(30))
                         }
                     }
+            }
 
-                Text("\(title.count)/30")
-                    .font(.caption)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("分组（可选）")
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
+
+                TextField("例如：工作 / 学习 / 生活", text: $groupName)
+                    .textFieldStyle(.roundedBorder)
             }
 
             VStack(alignment: .leading, spacing: 8) {
